@@ -1,0 +1,65 @@
+version: '3.7'
+services:
+  mongodb:
+    image: mongo:5.0.3
+    restart: always
+    ports:
+      - "27017:27017"
+    expose:
+      - 27017
+    command: "--bind_ip_all --replSet rs0 --keyFile /data/replicaset.key"
+    volumes:
+      - ./infra/LOCAL/localMongoKey.key:/data/replicaset.key
+    #      - ./scripts/init.js:/docker-entrypoint-initdb.d/init.js:ro
+    #    command: "--bind_ip_all"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=user
+      - MONGO_INITDB_ROOT_PASSWORD=password
+    #      - MONGO_INITDB_DATABASE=inshur-example
+    entrypoint:
+      - bash
+      - -c
+      - |
+        chmod 400 /data/replicaset.key
+        chown 999:999 /data/replicaset.key
+        exec docker-entrypoint.sh $$@
+
+  mongoDbReplicaSetup:
+    image: mongo:5.0.3
+    depends_on:
+      - mongodb
+    volumes:
+      - ./infra/LOCAL/scripts:/scripts
+    entrypoint:
+      - bash
+      - -c
+      - |
+        until mongo "mongodb://user:password@mongodb" --eval "print(\"waited for connection\")"
+        do
+        sleep 1
+        done
+
+        echo "Applying replication setup"
+        mongo "mongodb://user:password@mongodb" --eval "rs.initiate({  _id:\"rs0\", members: [ { _id: 0, host: \"mongodb:27017\" } ] });"
+        echo "Replication setup"
+
+  mongoDbDataSetup:
+    image: mongo:5.0.3
+    depends_on:
+      - mongoDbReplicaSetup
+    entrypoint:
+      - bash
+      - -c
+      - |
+        until mongo "mongodb://user:password@mongodb" --eval "print(\"waited for connection\")"
+        do
+        sleep 1
+        done
+
+        echo "Creating DB"
+        mongo "mongodb://user:password@mongodb" --eval "db.getCollection(\"test-collection\").insert({})"
+
+  quarkus:
+    image: lukegee/monog-changestream-reproducer:1.0.0-SNAPSHOT
+
+
