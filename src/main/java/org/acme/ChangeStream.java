@@ -1,7 +1,9 @@
 package org.acme;
 
+import com.mongodb.client.model.changestream.ChangeStreamDocument;
 import io.quarkus.mongodb.reactive.ReactiveMongoClient;
 import io.quarkus.runtime.StartupEvent;
+import org.bson.Document;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
@@ -19,8 +21,17 @@ public class ChangeStream {
         reactiveMongoClient.get().getDatabase("test")
                 .getCollection("test-collection")
                 .watch()
+                .log()
                 .subscribe()
-                .with(System.out::println);
+                .with(this::sink);
+    }
+
+
+    void sink(ChangeStreamDocument<Document> doc)
+    {
+        System.out.println("hello");
+        System.out.println(doc);
+        System.out.println(doc.getUpdateDescription());
     }
 
 }
